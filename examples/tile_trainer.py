@@ -153,6 +153,7 @@ class TileTrainer:
         save_imgs: bool = False,
         save_path: str = None,
         model_type: Literal["3dgs", "2dgs"] = "3dgs",
+        trial_number: int=None,
     ):
         losses = []
         optimizer = optim.Adam(
@@ -194,11 +195,11 @@ class TileTrainer:
             )
 
             render_colors, render_alphas, meta = renders
-            print("Rasterize:")
-            print("render_colors: ", render_colors)
-            print("render_alphas: ", render_alphas)
-            print("meta: ", meta.keys())
-            print("***************************************")
+            # print("Rasterize:")
+            # print("render_colors: ", render_colors)
+            # print("render_alphas: ", render_alphas)
+            # print("meta: ", meta.keys())
+            # print("***************************************")
 
             renders = renders[0]
             out_img = renders[0]
@@ -217,20 +218,25 @@ class TileTrainer:
             if verbose:
                 print(f"Iteration {iter + 1}/{iterations}, Loss: {loss.item()}")
 
-            if save_imgs and iter % 25 == 0:
+            if save_imgs and iter % 5 == 0:
                 frames.append((out_img.detach().cpu().numpy() * 255).astype(np.uint8))
             if iter == 0:
                 frame = Image.fromarray(frames[0])
-                frame.save("results5/frame0.png")
+                frame.save("results5/frame0.png")        
         if save_imgs:
-            
             # save them as a gif with PIL
             frames = [Image.fromarray(frame) for frame in frames]
-            # out_dir = os.path.join(os.getcwd(), "results")
-            out_dir = 'results5'
+            # write all frames to f"results/tile_trainer_50_trials{trial_number}/frame_{i}.png"
+            out_dir = f"results/tile_trainer_50_trials{trial_number}"
             os.makedirs(out_dir, exist_ok=True)
+            for i, frame in enumerate(frames):
+                frame.save(f"{out_dir}/frame_{i}.png")
+            # out_dir = os.path.join(os.getcwd(), "results")
+            out_dir = 'results/tile_trainer_50_trials'
+            os.makedirs(out_dir, exist_ok=True)
+            save_path = f"{out_dir}/training.gif" if trial_number is None else f"{out_dir}/trial_{trial_number}.gif"
             frames[0].save(
-                f"{out_dir}/training.gif",
+                save_path,
                 save_all=True,
                 append_images=frames[1:],
                 optimize=False,
@@ -289,47 +295,86 @@ def main(
     if random:
         weights = None
     print(f'Weights: {weights}')
-    trainer = TileTrainer(
+    
+    psnr_values = []
+    mse_values = []
+    os.makedirs("results/tile_trainer_50_trials", exist_ok=True)
+    for trial_n in range(1):
+        trainer = TileTrainer(
         gt_image=gt_image,
         num_points=num_points,
         tile_weights=weights
-    )
-    losses, final_img = trainer.train(
-        iterations=iterations,
-        lr=lr,
-        save_imgs=True,
-        model_type=model_type,
-    )
-    mse = losses[-1]
-    psnr = 10 * np.log10(1.0 / mse)
-    print(f'PSNR: {psnr}')
-    OUTPUT_DIR = f'{num_points}_points_{iterations}_iter'
-    # make dir if it doens't exist
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    OUTPUT_PLOTS_DIR = f'{OUTPUT_DIR}/plots'
-    os.makedirs(OUTPUT_PLOTS_DIR, exist_ok=True)
-    OUTPUTS_IMG_DIR = f'{OUTPUT_DIR}/final_outputs'
-    os.makedirs(OUTPUTS_IMG_DIR, exist_ok=True)
-    plt.plot(losses)
-    plt.xlabel('Iteration')
-    plt.ylabel('Loss')
-    plt.title(f'Loss curve: {num_points} points, {iterations} iter, of {(losses[0] - losses[-1]):.3f}, PSNR of {psnr:.3f}')
-    # make a weights_str that takes all elements and separates them with a comma
-    plt.savefig(f'{OUTPUT_PLOTS_DIR}/train_loss_{weights_to_str(weights)}_weights.png')
+        )
+        losses, final_img = trainer.train(
+            iterations=iterations,
+            lr=lr,
+            save_imgs=True,
+            model_type=model_type,
+            trial_number=trial_n
+        )
+        from skimage.metrics import peak_signal_noise_ratio as psnr
+        final_img = final_img.astype(np.float32) / 255.0
+        gt_image_np = gt_image.cpu().numpy()  # Convert gt_image to numpy array
+        psnr_index = psnr(gt_image_np, final_img)
+        psnr_values.append(psnr_index)
+        mse_values.append(losses[-1])
+
+    # write psnr_values, mse_values to determinism_debug.json
+    import json
+    with open('results/tile_trainer_50_trials/determinism_debug.json', 'w') as f:
+        json.dump({'psnr': psnr_values, 'mse': mse_values}, f)
+
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(12, 6))
+
+    plt.subplot(1, 2, 1)
+    plt.hist(psnr_values, bins=10, edgecolor='black')
+    plt.title('PSNR Distribution')
+    plt.xlabel('PSNR')
+    plt.ylabel('Frequency')
+
+    plt.subplot(1, 2, 2)
+    plt.hist(mse_values, bins=10, edgecolor='black')
+    plt.title('MSE Distribution')
+    plt.xlabel('MSE')
+    plt.ylabel('Frequency')
+
+    plt.tight_layout()
+    plt.savefig('psnr_mse_distribution_tile_trainer.png')
     plt.show()
+    print(f'psnr: {psnr_index}')
+
+
+    # mse = losses[-1]
+    # psnr = 10 * np.log10(1.0 / mse)
+    # print(f'PSNR: {psnr}')
+    # OUTPUT_DIR = f'{num_points}_points_{iterations}_iter'
+    # # make dir if it doens't exist
+    # os.makedirs(OUTPUT_DIR, exist_ok=True)
+    # OUTPUT_PLOTS_DIR = f'{OUTPUT_DIR}/plots'
+    # os.makedirs(OUTPUT_PLOTS_DIR, exist_ok=True)
+    # OUTPUTS_IMG_DIR = f'{OUTPUT_DIR}/final_outputs'
+    # os.makedirs(OUTPUTS_IMG_DIR, exist_ok=True)
+    # plt.plot(losses)
+    # plt.xlabel('Iteration')
+    # plt.ylabel('Loss')
+    # plt.title(f'Loss curve: {num_points} points, {iterations} iter, of {(losses[0] - losses[-1]):.3f}, PSNR of {psnr:.3f}')
+    # # make a weights_str that takes all elements and separates them with a comma
+    # plt.savefig(f'{OUTPUT_PLOTS_DIR}/train_loss_{weights_to_str(weights)}_weights.png')
+    # plt.show()
 
     
-    # plot psnr
-    plt.figure()
-    losses = np.array(losses)
-    psnrs = 10 * np.log10(1.0 / losses)
-    plt.plot(psnrs)
-    plt.xlabel('Iteration')
-    plt.ylabel('PSNR')
-    plt.title(f'PSNR curve" {num_points} points,  {iterations} iter, reduction of {(losses[0] - losses[-1]):.3f}, PSNR of {psnr:.3f}')
-    plt.savefig(f'{OUTPUT_PLOTS_DIR}/psnr_{weights_to_str(weights)}_weights.png')
+    # # plot psnr
+    # plt.figure()
+    # losses = np.array(losses)
+    # psnrs = 10 * np.log10(1.0 / losses)
+    # plt.plot(psnrs)
+    # plt.xlabel('Iteration')
+    # plt.ylabel('PSNR')
+    # plt.title(f'PSNR curve" {num_points} points,  {iterations} iter, reduction of {(losses[0] - losses[-1]):.3f}, PSNR of {psnr:.3f}')
+    # plt.savefig(f'{OUTPUT_PLOTS_DIR}/psnr_{weights_to_str(weights)}_weights.png')
 
-    plt.imsave(f'{OUTPUTS_IMG_DIR}/{psnr:.3f}_psnr_{weights_to_str(weights)}_weights.png', final_img)
+    # plt.imsave(f'{OUTPUTS_IMG_DIR}/{psnr:.3f}_psnr_{weights_to_str(weights)}_weights.png', final_img)
 
 if __name__ == "__main__":
     tyro.cli(main)

@@ -14,13 +14,17 @@ from gsplat import rasterization, rasterization_2dgs
 import random
 
 def seed_everything(seed: int):
+    print(f"Seeding with {seed}")
+    os.environ['PYTHONHASHSEED'] = str(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
     random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 
 seed_everything(42)
 
@@ -153,7 +157,7 @@ class SimpleTrainer:
         if save_imgs:
             # save them as a gif with PIL
             frames = [Image.fromarray(frame) for frame in frames]
-            out_dir = os.path.join(os.getcwd(), "results")
+            out_dir = os.path.join(os.getcwd(), "results10")
             os.makedirs(out_dir, exist_ok=True)
             frames[0].save(
                 f"{out_dir}/training.gif",
@@ -169,13 +173,11 @@ class SimpleTrainer:
             print(
             f"Per step(s):\nRasterization: {times[0]/iterations:.5f}, Backward: {times[1]/iterations:.5f}"
         )
-
+        final_img = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
         if save_path:
-            final_img = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
             import matplotlib.pyplot as plt
             plt.imsave(save_path, final_img)
-            
-        return losses
+        return losses, final_img
 
 
 def image_path_to_tensor(image_path: Path):
@@ -206,12 +208,41 @@ def main(
         gt_image[height // 2 :, width // 2 :, :] = torch.tensor([0.0, 0.0, 1.0])
 
     trainer = SimpleTrainer(gt_image=gt_image, num_points=num_points)
-    trainer.train(
-        iterations=iterations,
-        lr=lr,
-        save_imgs=save_imgs,
-        model_type=model_type,
-    )
+    psnr_values = []
+    mse_values = []
+    for _ in range(50):
+        losses, final_img = trainer.train(
+            iterations=iterations,
+            lr=lr,
+            save_imgs=save_imgs,
+            model_type=model_type,
+        )
+        from skimage.metrics import peak_signal_noise_ratio as psnr
+        final_img = final_img.astype(np.float32) / 255.0
+        gt_image_np = gt_image.cpu().numpy()  # Convert gt_image to numpy array
+        psnr_index = psnr(gt_image_np, final_img)
+        psnr_values.append(psnr_index)
+        mse_values.append(losses[-1])
+
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(12, 6))
+
+    plt.subplot(1, 2, 1)
+    plt.hist(psnr_values, bins=10, edgecolor='black')
+    plt.title('PSNR Distribution')
+    plt.xlabel('PSNR')
+    plt.ylabel('Frequency')
+
+    plt.subplot(1, 2, 2)
+    plt.hist(mse_values, bins=10, edgecolor='black')
+    plt.title('MSE Distribution')
+    plt.xlabel('MSE')
+    plt.ylabel('Frequency')
+
+    plt.tight_layout()
+    plt.savefig('psnr_mse_distribution_image_fitting2.png')
+    plt.show()
+    print(f'psnr: {psnr_index}')
 
 
 if __name__ == "__main__":
