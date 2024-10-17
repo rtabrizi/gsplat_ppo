@@ -18,7 +18,7 @@ from PIL import Image
 from torch import Tensor, optim
 
 from gsplat import rasterization, rasterization_2dgs
-from policy_2d import Policy2D
+from policy_2d import Policy
 from rollout_buffer import RolloutBuffer
 from image_fitting import SimpleTrainer
 import random
@@ -46,7 +46,7 @@ def image_path_to_tensor(image_path: Path):
     return img_tensor 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-lr_predictor = Policy2D().to(device)
+lr_predictor = Policy().to(device)
 
 class PPO:
     def __init__(self, policy, env, 
