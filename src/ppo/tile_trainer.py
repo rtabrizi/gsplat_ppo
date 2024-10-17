@@ -213,7 +213,7 @@ class TileTrainer:
             import matplotlib.pyplot as plt
             plt.imsave(save_path, final_img)
             
-        return losses
+        return losses, final_img
 
 
 def image_path_to_tensor(image_path: Path):
