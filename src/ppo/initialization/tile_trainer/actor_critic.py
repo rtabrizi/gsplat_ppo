@@ -32,7 +32,7 @@ class LRActor(Actor):
         lr_idx = actor_dist.sample()
         return self.lrs[lr_idx], actor_dist.log_probs[lr_idx]
 
-    def log_probs(self, obs, acts):
+    def log_prob(self, obs, acts):
         log_probs = self.forward()
         actor_dist = dist.Categorical(logits=log_probs)
         return log_probs[acts]
