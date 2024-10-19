@@ -16,12 +16,20 @@ from src.utils import *
 
 class PPO:
     def __init__(self, policy: Policy, env: Env, 
-                 clip_epsilon=0.2, gamma=1, gae_lambda=0.95, 
-                 normalize_advantages=True, entropy_coeff=0.0,  # Encourage exploration with entropy bonus
-                 n_epochs=5, batch_size=10, buffer_size=20,
-                 device='cuda', log_interval=10, 
-                 shuffle=False, log_callback=None,
-                 **kwargs):
+                 clip_epsilon=0.2, 
+                 gamma=1, 
+                 gae_lambda=0.95, 
+                 normalize_advantages=True, 
+                 entropy_coeff=0.0,
+                 n_epochs=5, 
+                 batch_size=10, 
+                 buffer_size=20,
+                 device='cuda', 
+                 log_interval=10, 
+                 shuffle=False,
+                 log_callback=None,
+                 **kwargs
+                 ):
         """
         Initialize the PPO algorithm with hyperparameters and required objects.
 

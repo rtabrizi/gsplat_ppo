@@ -1,32 +1,12 @@
-import math
-import os
-import json
+
 import matplotlib.pyplot as plt
-import time
-from collections import defaultdict
-from tqdm import tqdm
-from pathlib import Path
-from typing import Literal, Optional
-from scipy.signal import butter, filtfilt
-import time
-
-import numpy as np
-import torch.nn as nn
 import torch
-import tyro
-from PIL import Image
-from torch import Tensor, optim
-
-from gsplat import rasterization, rasterization_2dgs
-from examples.image_fitting import SimpleTrainer
-import random
 
 from src.ppo.ppo import PPO
-from src.ppo.base_env import Env
 from src.ppo.base_policy import Policy
 from src.ppo.lr_predictor.actor_critic import LRCritic, LRActor
 from src.ppo.lr_predictor.env import LREnv
-from src.utils import *
+from src.utils import image_path_to_tensor, seed_everything
 
 device = 'cuda'
 seed_everything(42)
