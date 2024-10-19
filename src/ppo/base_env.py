@@ -2,9 +2,11 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 class Env(ABC):
-    def __init__(self) -> None:
+    def __init__(self, observation_shape=None, act_shape=None) -> None:
         self.step_count = 0
         self.num_steps = 100
+        self.observation_shape = observation_shape
+        self.action_shape = act_shape
         super().__init__()
         
     @abstractmethod

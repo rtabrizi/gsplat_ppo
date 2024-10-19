@@ -7,20 +7,22 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 class Critic(nn.Module, ABC):
+    """
+    The state value function V
+    """
     def __init__(self):
         super().__init__()
 
     @abstractmethod
-    def forward(self, action: Any, state=None):
+    def forward(self, obs):
         """
         Output the critic's predicted values.
 
         Parameters:
-        - action (Any): The action(s) to be taken.
-        - state (Any): The current state 
+        - obs (Tensor): The current obs 
 
         Returns:
-        - value_estimate (float): The value estimate of the state-action pair.
+        - value_estimate (Tensor): The value estimate of the obs.
         """
         pass
 
@@ -29,12 +31,12 @@ class Actor(nn.Module, ABC):
         super().__init__()
 
     @abstractmethod
-    def forward(self, state: Any):
+    def forward(self, obs: Tensor):
         """
         Forward through the Actor network
         
         Parameters:
-        - state (Any): The current state
+        - obs (Tensor): The current obs
         
         Returns:
         - intermediate (Any): The result of the forward pass,
@@ -43,30 +45,31 @@ class Actor(nn.Module, ABC):
         pass
 
     @abstractmethod
-    def select_action(self, state: Any):
+    def select_action(self, obs: Tensor):
         """
         Runs the actor network to return the action and log_prob of the action.
         
         Parameters:
-        - state (Any): The current state
+        - obs (Tensor): The current obs
         
         Returns:
         - action (Any): The action to be taken.
-        - log_prob (float): The log probability of the action.
+        - log_prob (Tensor): The log probability of the action.
         """
         pass
 
     @abstractmethod
-    def log_probs(self):
+    def evaluate_actions(self, obs: Tensor, action: Tensor):
         """
-        Returns log probabilities of the action space.
+        Returns log probabilities of choosing the action given the obs
+        and the entropy of the action distribution.
 
         Parameters:
         - None
 
         Returns:
-        - log_probs: List(float): the log probabilities of all actions.
-
+        - log_probs: Tensor: the log probabilities of all actions.
+        - entropy: Tensor: the entropy of the action distribution.
         """
         pass
 
@@ -75,11 +78,12 @@ class Policy(nn.Module):
                 actor: Actor,
                 critic: Critic,
                 actor_lr=3e-4,
-                critic_lr=1e-3
+                critic_lr=1e-3,
+                device='cuda'
                 ):
         super().__init__()
-        self.actor = actor
-        self.critic = critic
+        self.actor = actor.to(device)
+        self.critic = critic.to(device)
 
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_lr)
@@ -90,10 +94,10 @@ class Policy(nn.Module):
         the action, log probability, and the value from the critic.
 
         Parameters:
-        - obs (Any): The observation returned by the environment.
+        - obs (Tensor): The observation returned by the environment.
 
         Returns:
-        - action (Any): 
+        - action (Tensor): The action to be taken.
         """
         # Sample action from actor
         action, log_prob = self.actor.select_action(obs)  
@@ -104,15 +108,15 @@ class Policy(nn.Module):
 
     def evaluate_actions(self, obs, actions):
         """
-        Given observations and actions, return log probabilities of actions
+        Given observations and actions, return log probabilities of actions, entropy of the action distribution,
         and value estimates. This will be used by PPO to compute the loss.
         """
         # Evaluate actions from actor
-        log_probs = self.actor.log_probs(obs, actions) 
+        log_probs, entropy = self.actor.evaluate_actions(obs, actions)
 
         # Get value estimates from critic
         values = self.critic(obs)  
-        return values, log_probs
+        return values, log_probs, entropy
 
     def optimizer_step(self, actor_loss, critic_loss):
         """
@@ -120,10 +124,16 @@ class Policy(nn.Module):
         """
         # Actor update
         self.actor_optimizer.zero_grad()
-        actor_loss.backward(retain_graph=True)  # Retain graph?
+        actor_loss.backward()
         self.actor_optimizer.step()
 
         # Critic update
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
+
+    def predict_values(self, obs):
+        """
+        Predict the value of the observation using the critic.
+        """
+        return self.critic(obs)
