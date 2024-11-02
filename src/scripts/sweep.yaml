@@ -1,0 +1,26 @@
+program: src/scripts/wb_ppo_lr_predictor.py
+command:
+  - /secondary/home/aayushg/miniconda3/envs/gsplat/bin/python3
+  - ${program}
+  - --run_sweep_agent
+method: grid
+parameters:
+  n_epochs:
+    values: [3, 5, 7]
+  batch_size:
+    values: [64, 128, 256]
+  buffer_multiplier:
+    values: [1, 2, 4, 8]
+  num_updates:
+    values: [300, 450, 600] # [200, 300, 400, 500]
+  entropy_coeff:
+    values: [0.05, 0.1, 0.15, 0.2] #0.0, 0.01, 0.05, 0.1
+  actor_lr:
+    values: [0.0003, 0.0001] #0.0001, 0.0003, 0.001
+  clip_epsilon:
+    values: [0.15, 0.18, 0.2] #0.1, 0.2, 0.3
+  critic_lr:
+    values: [0.0003]
+metric:
+  name: num_matches
+  goal: maximize

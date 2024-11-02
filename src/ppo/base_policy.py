@@ -82,12 +82,15 @@ class Policy(nn.Module):
                 device='cuda'
                 ):
         super().__init__()
+        print(f'initializing policy with device: {device}')
         self.actor = actor.to(device)
         self.critic = critic.to(device)
 
+        # print(f"actor: {self.actor}")
+        # print(f"critic: {self.critic}")
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_lr)
-
+    
     def select_action(self, obs):
         """
         Given an observation, use the actor to select an action and return
@@ -126,11 +129,19 @@ class Policy(nn.Module):
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
+        # print(f"Did optimizer step with actor loss: {actor_loss}")
 
-        # Critic update
+        # # Critic update
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
+    
+    def set_env(self, train_mode: bool):
+        """
+        Set the env based on train or test mode.
+        """
+        self.actor.set_env(train_mode)
+        self.critic.set_env(train_mode)
 
     def predict_values(self, obs):
         """
